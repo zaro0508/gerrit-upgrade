@@ -53,11 +53,28 @@ function backup_site() {
     tar -pczf ${GERRIT_SITE}-${id}.tar.gz ${GERRIT_SITE}
 }
 
-# upgrade Gerrit
+# upgrading from gerrit 2.8 requires this workaround
+# https://groups.google.com/d/msg/repo-discuss/0qP1xZoOoDY/a9LKSYkii5MJ
+function create_db_index() {
+    local id=$1
+    echo "Creating index in ${DB_NAME} for upgrade"
+    mysqldump -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} \
+      ${DB_NAME} -e "CREATE INDEX patch_set_approvals_closedbyu ON patch_set_approvals (change_open);" ||
+      { echo "Problem creating required index for upgrade"; exit 1; }
+}
+
+# upgrade Gerrit site
 function gerrit_init() {
 
     echo "Upgrading Gerrit in ${GERRIT_SITE} using ${GERRIT_WAR}"
     java -jar ${GERRIT_WAR} init --batch --no-auto-start -d ${GERRIT_SITE}
+}
+
+# install Gerrit core plugins
+function install_plugins() {
+
+    echo "Installing Gerrit core plugins into ${GERRIT_SITE}/plugins"
+    unzip -jo ${GERRIT_WAR} WEB-INF/plugins/* -d ${GERRIT_SITE}/plugins
 }
 
 # reindex Gerrit site
@@ -84,9 +101,11 @@ function restore_site() {
 function upgrade() {
     backup_db "backup-before-upgrade"
     backup_site "backup-before-upgrade"
+    create_db_index
 
     trap cleanup "EXIT" "SIGTRAP" "SIGKILL" "SIGTERM"
     gerrit_init
+    install_plugins
     gerrit_reindex
     trap - "EXIT" "SIGTRAP" "SIGKILL" "SIGTERM"
 }
