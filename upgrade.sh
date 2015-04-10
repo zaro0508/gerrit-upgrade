@@ -43,58 +43,58 @@ function get_config_data() {
 function backup_db() {
     local id=$1
     echo "Backing up db ${DB_NAME} to ${DB_NAME}-${id}.sql"
-    mysqldump -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} ${DB_NAME} > ${DB_NAME}-${id}.sql
+    mysqldump -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} \
+      ${DB_NAME} > ${DB_NAME}-${id}.sql
 }
 
 # backup Gerrit site
 function backup_site() {
     local id=$1
-    echo "Backing up ${GERRIT_SITE} to ${GERRIT_SITE}-${id}.tar.gz"
-    tar -pczf ${GERRIT_SITE}-${id}.tar.gz ${GERRIT_SITE}
+    echo "Backing up ${GERRIT_SITE_PATH} to ${GERRIT_SITE_FOLDER}-${id}.tar.gz"
+    tar -pczf ${GERRIT_SITE_FOLDER}-${id}.tar.gz -C ${GERRIT_SITE_PATH} .
 }
 
 # upgrading from gerrit 2.8 requires this workaround
 # https://groups.google.com/d/msg/repo-discuss/0qP1xZoOoDY/a9LKSYkii5MJ
 function create_db_index() {
-    local id=$1
     echo "Creating index in ${DB_NAME} for upgrade"
-    mysqldump -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} \
-      ${DB_NAME} -e "CREATE INDEX patch_set_approvals_closedbyu ON patch_set_approvals (change_open);" ||
+    mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} ${DB_NAME} \
+      -e "CREATE INDEX patch_set_approvals_closedbyu ON patch_set_approvals (change_open);" ||
       { echo "Problem creating required index for upgrade"; exit 1; }
 }
 
 # upgrade Gerrit site
 function gerrit_init() {
 
-    echo "Upgrading Gerrit in ${GERRIT_SITE} using ${GERRIT_WAR}"
-    java -jar ${GERRIT_WAR} init --batch --no-auto-start -d ${GERRIT_SITE}
+    echo "Upgrading Gerrit in ${GERRIT_SITE_PATH} using ${GERRIT_WAR}"
+    java -jar ${GERRIT_WAR} init --batch --no-auto-start -d ${GERRIT_SITE_PATH}
 }
 
 # install Gerrit core plugins
 function install_plugins() {
 
-    echo "Installing Gerrit core plugins into ${GERRIT_SITE}/plugins"
-    unzip -jo ${GERRIT_WAR} WEB-INF/plugins/* -d ${GERRIT_SITE}/plugins
+    echo "Installing Gerrit core plugins into ${GERRIT_SITE_PATH}/plugins"
+    unzip -jo ${GERRIT_WAR} WEB-INF/plugins/* -d ${GERRIT_SITE_PATH}/plugins
 }
 
 # reindex Gerrit site
 function gerrit_reindex() {
 
-    echo "Reindexing Gerrit in ${GERRIT_SITE}"
-    java -jar ${GERRIT_WAR} reindex -d ${GERRIT_SITE}
+    echo "Reindexing Gerrit in ${GERRIT_SITE_PATH}"
+    java -jar ${GERRIT_WAR} reindex -d ${GERRIT_SITE_PATH}
 }
-
 
 function restore_db() {
     local id=$1
     echo "Restoring previous backup of DB with ${DB_NAME}-${id}.sql"
-    mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} ${DB_NAME} < ${DB_NAME}-${id}.sql
+    mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASSWD:+-p${DB_PASSWD}} \
+      ${DB_NAME} < ${DB_NAME}-${id}.sql
 }
 
 function restore_site() {
     local id=$1
-    echo "Restoring previous backup of site with ${GERRIT_SITE}-${id}.tar.gz"
-    tar -zxvf ${GERRIT_SITE}-${id}.tar.gz -C ${GERRIT_SITE}
+    echo "Restoring previous backup of site with ${GERRIT_SITE_FOLDER}-${id}.tar.gz"
+    tar -zxvf ${GERRIT_SITE_FOLDER}-${id}.tar.gz -C ${GERRIT_SITE_PATH}
 }
 
 
@@ -121,7 +121,7 @@ USAGE="$0 ACTION [path]
 
   ACTION   upgrade, revert or backup
   war      path to gerrit war file (i.e. /home/gerrit2/gerrit-2.10.war)
-  site     path to gerrit site directory (i.e. /home/gerrit2/review)
+  site     path to gerrit site folder (i.e. /home/gerrit2/review)
 "
 
 if [ $# -ne 3 ]
@@ -131,13 +131,14 @@ then
 fi
 
 GERRIT_WAR=$2
-GERRIT_SITE=$3
-get_config_data ${GERRIT_SITE}
+GERRIT_SITE_PATH=$3
+GERRIT_SITE_FOLDER=`basename ${GERRIT_SITE_PATH}`
+get_config_data ${GERRIT_SITE_PATH}
 
 case $1 in
     "backup")
-        backup_db
-        backup_site
+        backup_db "backup"
+        backup_site "backup"
         ;;
     "upgrade")
 	upgrade
