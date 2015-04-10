@@ -94,7 +94,7 @@ function restore_db() {
 function restore_site() {
     local id=$1
     echo "Restoring previous backup of site with ${GERRIT_SITE_FOLDER}-${id}.tar.gz"
-    tar -zxvf ${GERRIT_SITE_FOLDER}-${id}.tar.gz -C ${GERRIT_SITE_PATH}
+    tar -zxf ${GERRIT_SITE_FOLDER}-${id}.tar.gz -C ${GERRIT_SITE_PATH}
 }
 
 
@@ -113,8 +113,8 @@ function upgrade() {
 function revert() {
     backup_db "backup-before-revert"
     backup_site "backup-before-revert"
-    restore_db
-    restore_site
+    restore_db "backup-before-upgrade"
+    restore_site "backup-before-upgrade"
 }
 
 USAGE="$0 ACTION [path]
